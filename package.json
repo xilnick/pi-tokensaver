@@ -1,0 +1,63 @@
+{
+  "name": "pi-tokensaver",
+  "version": "0.0.1",
+  "description": "Give your Pi AI agent a semantic memory — bridges tokensave's Rust-powered local graph engine into your coding workflow for token-efficient codebase exploration",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "pi",
+    "tokensave",
+    "mcp",
+    "model-context-protocol",
+    "semantic-graph",
+    "code-exploration",
+    "token-efficient",
+    "ai-agent",
+    "coding-assistant",
+    "codebase-indexing",
+    "developer-tools",
+    "typescript"
+  ],
+  "homepage": "https://github.com/xilnick/pi-tokensaver#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xilnick/pi-tokensaver.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xilnick/pi-tokensaver/issues"
+  },
+  "license": "MIT",
+  "author": "xilnick",
+  "main": "src/index.ts",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run test/extension.test.ts",
+    "test:integration": "vitest run test/mcp-client.test.ts"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.3",
+    "vitest": "^4.1.4"
+  }
+}

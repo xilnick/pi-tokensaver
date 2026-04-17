@@ -1,0 +1,20 @@
+# Build output
+dist/
+*.tgz
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# TokenSave semantic graph data (local, per-project)
+.tokensave/
+
+# Pi agent local state (session caches, telemetry, taskplane state)
+.pi/
+.pi-lens/
