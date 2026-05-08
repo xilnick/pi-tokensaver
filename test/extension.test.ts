@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdir, rmdir, unlink, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { Type } from "@sinclair/typebox";
 
 // We need to import the extension's internals
@@ -240,6 +241,9 @@ describe("TokenSaveExtension — .gitignore Handling", () => {
   beforeEach(async () => {
     tempDir = join(tmpdir(), `tokensaver-gitignore-test-${Date.now()}-${Math.random()}`);
     await mkdir(tempDir, { recursive: true });
+    // Initialize a git repo so git rev-parse and check-ignore work
+    const init = await execCommand("git", ["init"], tempDir);
+    expect(init.code).toBe(0);
   });
 
   afterEach(async () => {
@@ -254,17 +258,51 @@ describe("TokenSaveExtension — .gitignore Handling", () => {
   });
 
   // Replicate the ensureGitignore logic from the extension
+  function execCommand(
+    command: string,
+    args: string[],
+    cwd?: string
+  ): Promise<{ code: number; stdout: string; stderr: string }> {
+    return new Promise((resolve) => {
+      const child = spawn(command, args, {
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+
+      child.stdout?.on("data", (d: Buffer) => stdoutChunks.push(d));
+      child.stderr?.on("data", (d: Buffer) => stderrChunks.push(d));
+
+      child.on("close", (code) => {
+        resolve({
+          code: code ?? 1,
+          stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+          stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        });
+      });
+
+      child.on("error", (err) => {
+        resolve({
+          code: 1,
+          stdout: "",
+          stderr: err.message,
+        });
+      });
+    });
+  }
+
   async function ensureGitignore(projectRoot: string): Promise<void> {
+    const inRepo = await execCommand("git", ["rev-parse", "--is-inside-work-tree"], projectRoot);
+    if (inRepo.code !== 0) return;
+
+    // git check-ignore: 0 = ignored, 1 = not ignored, 128 = error.
+    // Only append when git definitively says "not ignored".
+    const ignored = await execCommand("git", ["check-ignore", "-q", ".tokensave/"], projectRoot);
+    if (ignored.code !== 1) return;
+
     const gitignorePath = join(projectRoot, ".gitignore");
-
-    if (existsSync(gitignorePath)) {
-      const content = await readFile(gitignorePath, "utf8");
-      const lines = content.split(/\r?\n/);
-      if (lines.some((l) => l.trim() === ".tokensave/" || l.trim() === ".tokensave")) {
-        return;
-      }
-    }
-
     const entry = "\n# TokenSave semantic graph data\n.tokensave/\n";
     const { appendFile } = await import("node:fs/promises");
     await appendFile(gitignorePath, entry);
@@ -292,7 +330,7 @@ describe("TokenSaveExtension — .gitignore Handling", () => {
     expect(content).toContain(".tokensave/");
   });
 
-  it("does not duplicate .tokensave/ if already present", async () => {
+  it("does not append .tokensave/ when it is already in the local .gitignore", async () => {
     const gitignorePath = join(tempDir, ".gitignore");
     await writeFile(gitignorePath, "node_modules/\n.tokensave/\n");
 
@@ -303,27 +341,44 @@ describe("TokenSaveExtension — .gitignore Handling", () => {
     expect(count).toBe(1);
   });
 
-  it("recognizes .tokensave (without trailing slash) as already present", async () => {
+  it("does not append .tokensave/ when it is already ignored by a global gitignore", async () => {
+    // Create a local .gitignore that does NOT mention .tokensave
     const gitignorePath = join(tempDir, ".gitignore");
-    await writeFile(gitignorePath, "node_modules/\n.tokensave\n");
+    await writeFile(gitignorePath, "node_modules/\n");
+
+    // Create a fake "global" gitignore inside the repo and tell git to use it
+    const globalIgnorePath = join(tempDir, ".global_gitignore");
+    await writeFile(globalIgnorePath, ".tokensave/\n");
+    await execCommand("git", ["config", "core.excludesfile", globalIgnorePath], tempDir);
 
     await ensureGitignore(tempDir);
 
     const content = await readFile(gitignorePath, "utf8");
-    // Should NOT have appended .tokensave/ again
-    const count = content.split(".tokensave").length - 1;
-    expect(count).toBe(1);
+    expect(content).not.toContain("TokenSave semantic graph data");
   });
 
   it("is idempotent — calling twice does not create duplicates", async () => {
     // First call: creates
     await ensureGitignore(tempDir);
-    // Second call: should be a no-op
+    // Second call: should be a no-op because .tokensave/ is now in .gitignore
     await ensureGitignore(tempDir);
 
     const content = await readFile(join(tempDir, ".gitignore"), "utf8");
     const count = content.split(".tokensave/").length - 1;
     expect(count).toBe(1);
+  });
+
+  it("does nothing when not inside a git work tree", async () => {
+    const nonRepoDir = join(tmpdir(), `tokensaver-nonrepo-test-${Date.now()}-${Math.random()}`);
+    await mkdir(nonRepoDir, { recursive: true });
+
+    try {
+      await ensureGitignore(nonRepoDir);
+      const gitignorePath = join(nonRepoDir, ".gitignore");
+      expect(existsSync(gitignorePath)).toBe(false);
+    } finally {
+      await rmdir(nonRepoDir);
+    }
   });
 });
 

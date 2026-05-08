@@ -233,21 +233,19 @@ export class TokenSaveExtension {
   }
 
   /**
-   * Append `.tokensave/` to .gitignore if it's not already there.
+   * Append `.tokensave/` to .gitignore if git does not already ignore it.
+   * Uses `git check-ignore` so global .gitignore files are respected.
    */
   private async ensureGitignore(): Promise<void> {
+    const inRepo = await this.execCommand("git", ["rev-parse", "--is-inside-work-tree"]);
+    if (inRepo.code !== 0) return;
+
+    // git check-ignore: 0 = ignored, 1 = not ignored, 128 = error.
+    // Only append when git definitively says "not ignored".
+    const ignored = await this.execCommand("git", ["check-ignore", "-q", ".tokensave/"]);
+    if (ignored.code !== 1) return;
+
     const gitignorePath = join(this.projectRoot, ".gitignore");
-
-    // Check if .tokensave/ or .tokensave is already present
-    if (existsSync(gitignorePath)) {
-      const content = await readFile(gitignorePath, "utf8");
-      const lines = content.split(/\r?\n/);
-      if (lines.some((l) => l.trim() === ".tokensave/" || l.trim() === ".tokensave")) {
-        return; // Already ignored
-      }
-    }
-
-    // Append .tokensave/ to .gitignore
     const entry = "\n# TokenSave semantic graph data\n.tokensave/\n";
     await appendFile(gitignorePath, entry);
   }
