@@ -1,6 +1,6 @@
 {
   "name": "pi-tokensaver",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Give your Pi AI agent a semantic memory — bridges tokensave's Rust-powered local graph engine into your coding workflow for token-efficient codebase exploration",
   "type": "module",
   "keywords": [
